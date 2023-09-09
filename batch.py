@@ -16,6 +16,7 @@ LOG_FOLDER = './videos/logs'
 ESTIMATE_DECODE_SPEED = 350
 ESTIMATE_UPSCALE_SPEED = 11
 ESTIMATE_REBUILD_SPEED = 22
+SPLIT_NUM = 6
 
 
 
@@ -117,14 +118,35 @@ if __name__ == '__main__':
         time_consumption = time_extract_end - time_extract_start
         print(f'解帧完成, 用时 {round(time_consumption, 2)} 秒, 速度 {round(nb_frames / time_consumption, 2)} frames/s')
 
+        # 切分
+        time_split_start = time()
+        print(f'开始切分, 份数：{SPLIT_NUM}')
+        framelist = glob(f'{EXTRACT_IMAGE_FOLDER}/*')
+        splited_frame_lists = [framelist[i::SPLIT_NUM] for i in range(SPLIT_NUM)]
+        subfolder_paths = []
+        for i, splited_frame_list in enumerate(splited_frame_lists):
+            subfolder_path = f'{EXTRACT_IMAGE_FOLDER}/frames_subfolder{i}'
+            os.makedirs(subfolder_path, exist_ok=False)
+            for image in splited_frame_list:
+                shutil.move(image, subfolder_path)
+            subfolder_paths.append(subfolder_path)
+        time_split_end = time()
+        time_consumption = time_split_end - time_split_start
+        print(f'切分完成, 用时 {round(time_consumption, 2)} 秒, 速度 {round(nb_frames / time_consumption, 2)} frames/s')
+            
         time_upsampling_start = time()
-        upsampling_cmd = f'.\\realesrgan-ncnn-vulkan.exe -i {EXTRACT_IMAGE_FOLDER} -o {OUTPUT_IMAGE_FOLDER} -n realesr-animevideov3 -s {SCALE} -f jpg -j 32:32:32'
-        print(f'开始超分，指令: {upsampling_cmd}')
-        p = subprocess.Popen(
-            upsampling_cmd,
-            stderr=subprocess.STDOUT,
-            stdout=subprocess.DEVNULL)
-        p.wait()
+        sleep_procs = []
+        for i, subfolder in enumerate(subfolder_paths):
+            # 官方 repo 提供了 -j 参数用于设置 ncnn 线程数，但实测无法增加 fps，此处不调整
+            upsampling_cmd = f'.\\realesrgan-ncnn-vulkan.exe -i {subfolder} -o {OUTPUT_IMAGE_FOLDER} -n realesr-animevideov3 -s {SCALE} -f jpg'
+            print(f'开始多线程超分，指令: {upsampling_cmd}')
+            p = subprocess.Popen(
+                upsampling_cmd,
+                stderr=subprocess.STDOUT,
+                stdout=open(f'{LOG_FOLDER}/{output_video_fullname}_SR{i}.log', 'a'))
+            sleep_procs.append(p)
+        for p in sleep_procs:
+            p.communicate()
         time_upsampling_end = time()
         time_consumption = time_upsampling_end - time_upsampling_start
         print(f'超分完成, 用时 {round(time_consumption, 2)} 秒, 速度 {round(nb_frames / time_consumption, 2)} frames/s')
