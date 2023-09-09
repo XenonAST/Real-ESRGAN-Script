@@ -1,2 +1,12 @@
 # Real-ESRGAN-Script
-self modified batch process tool for real-ESRGAN
+
+This is a batch process tool of real-ESRGAN ncnn vulkan version for self use.
+
+Please refer to the original repo for Real-ESRGAN
+
+------------------------
+
+GitHub: https://github.com/xinntao/Real-ESRGAN/
+Paper: https://arxiv.org/abs/2107.10833
+
+------------------------
