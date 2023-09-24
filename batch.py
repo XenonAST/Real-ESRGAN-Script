@@ -88,6 +88,7 @@ if __name__ == '__main__':
         video_h = video_info_dict['height']
         frame_rate = round(eval(video_info_dict['r_frame_rate']), 2)
         nb_frames = int(video_info_dict['nb_frames'])
+        bit_rate = int(video_info_dict['bit_rate'])
         # 判断是否存在音频流
         audio_exists = len([c for c in info['streams'] if c['codec_type'] == 'audio']) > 0
         
@@ -115,10 +116,10 @@ if __name__ == '__main__':
         p.wait()
         time_extract_end = time()
         time_consumption = time_extract_end - time_extract_start
-        print(f'解帧完成, 用时 {round(time_consumption, 2)} 秒, 速度 {round(nb_frames / time_consumption, 2)} frames/s')
+        print(f'解帧完成, 用时 {round(time_consumption, 2)} 秒, 速度 {round(nb_frames / time_consumption, 2)} fps')
 
         time_upsampling_start = time()
-        upsampling_cmd = f'.\\realesrgan-ncnn-vulkan.exe -i {EXTRACT_IMAGE_FOLDER} -o {OUTPUT_IMAGE_FOLDER} -n realesr-animevideov3 -s {SCALE} -f jpg -j 32:32:32'
+        upsampling_cmd = f'.\\realesrgan-ncnn-vulkan.exe -i {EXTRACT_IMAGE_FOLDER} -o {OUTPUT_IMAGE_FOLDER} -n realesr-animevideov3 -s {SCALE} -f jpg'
         print(f'开始超分，指令: {upsampling_cmd}')
         p = subprocess.Popen(
             upsampling_cmd,
@@ -127,12 +128,13 @@ if __name__ == '__main__':
         p.wait()
         time_upsampling_end = time()
         time_consumption = time_upsampling_end - time_upsampling_start
-        print(f'超分完成, 用时 {round(time_consumption, 2)} 秒, 速度 {round(nb_frames / time_consumption, 2)} frames/s')
+        print(f'超分完成, 用时 {round(time_consumption, 2)} 秒, 速度 {round(nb_frames / time_consumption, 2)} fps')
 
         time_rebuild_start = time()
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         # 注意，无音频流的不能使用 "-map 1:a:0" 来拷贝原视频音频流，否则报错
-        rebuild_video_cmd = f'ffmpeg -r {frame_rate} -f image2 -i {OUTPUT_IMAGE_FOLDER}/frame%08d.jpg -i \"{input_video}\" -map 0:v:0 {"-map 1:a:0" if audio_exists else ""} -c:a copy -c:v libx264 -r {frame_rate} -pix_fmt yuv420p \"{output_path}\" -y'
+        # -c:v hevc -b:v {bit_rate} 使用显卡硬件加速 H265 编码，维持原有码率，在不降低质量的前提下提速约 30%
+        rebuild_video_cmd = f'ffmpeg -r {frame_rate} -f image2 -i {OUTPUT_IMAGE_FOLDER}/frame%08d.jpg -i \"{input_video}\" -map 0:v:0 {"-map 1:a:0" if audio_exists else ""} -c:a copy -c:v hevc -b:v {bit_rate} -r {frame_rate} -pix_fmt yuv420p \"{output_path}\" -y'
         print(f'开始合成，指令: {rebuild_video_cmd}')
         p = subprocess.Popen(
             rebuild_video_cmd,
@@ -141,7 +143,7 @@ if __name__ == '__main__':
         p.wait()
         time_rebuild_end = time()
         time_consumption = time_rebuild_end - time_rebuild_start
-        print(f'合成完成, 用时 {round(time_consumption, 2)} 秒, 速度 {round(nb_frames / time_consumption, 2)} frames/s')
+        print(f'合成完成, 用时 {round(time_consumption, 2)} 秒, 速度 {round(nb_frames / time_consumption, 2)} fps')
 
         print(f'输出视频: {output_path}')
         processed_videos_num += 1
